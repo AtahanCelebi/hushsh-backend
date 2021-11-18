@@ -1,90 +1,67 @@
-from os import stat
-from fastapi import FastAPI,status,HTTPException, Depends
-from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
-from pydantic import BaseModel
-from typing import Optional,List
-from database import SessionLocal
-import models
+from fastapi import FastAPI
+from auth_routes import auth_router
+from fastapi_jwt_auth import AuthJWT
+from schemas import Settings
+import inspect, re
+from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from fastapi.openapi.utils import get_openapi
 
 app=FastAPI()
-#python -m uvicorn main2:app --reload
-
-oauthSchema=OAuth2PasswordBearer(tokenUrl="token")
-@app.post("/token")
-async def token_generate(form_data: OAuth2PasswordRequestForm= Depends()):
-    return {"access_token":form_data.username,"token_type":"bearer"}
-@app.get("/users/profile")
-async def profile(token: str = Depends(oauthSchema)):
-    return {
-        "user":"HEllo!"
-    }
-
-class Users(BaseModel): #serializer
-    nameSurname:str
-    nickName:str
-    email:str
-    password:str
-
-    class Config:
-        orm_mode=True
 
 
-db=SessionLocal()
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
 
-@app.get('/all-users',response_model=List[Users],status_code=200)
-def get_all_items():
-    getUsers=db.query(models.Users).all()
-
-    return getUsers
-
-@app.get('/user/{user_id}',response_model=Users,status_code=status.HTTP_200_OK)
-def get_an_item(user_id:int,token: str = Depends(oauthSchema)):
-    getUser=db.query(models.Users).filter(models.Users.id==user_id).first()
-    return getUser
-
-@app.post('/users',response_model=Users,
-        status_code=status.HTTP_201_CREATED)
-def create_an_item(user:Users):
-    db_user=db.query(models.Users).filter(models.Users.nickName==user.nickName).first()
-
-    if db_user is not None:
-        raise HTTPException(status_code=400,detail="Item already exists")
-
-
-
-    new_user=models.Users(
-        nameSurname=user.nameSurname,
-        nickName=user.nickName,
-        email=user.email,
-        password=user.password
+    openapi_schema = get_openapi(
+        title = "hushsh-ayakyolu API",
+        version = "1.0",
+        description = "An API for a hushsh.com",
+        routes = app.routes,
     )
 
+    openapi_schema["components"]["securitySchemes"] = {
+        "Bearer Auth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization",
+            "description": "Enter: **'Bearer &lt;JWT&gt;'**, where JWT is the access token"
+        }
+    }
 
-    db.add(new_user)
-    db.commit()
+    # Get all routes where jwt_optional() or jwt_required
+    api_router = [route for route in app.routes if isinstance(route, APIRoute)]
 
-    return new_user
+    for route in api_router:
+        path = getattr(route, "path")
+        endpoint = getattr(route,"endpoint")
+        methods = [method.lower() for method in getattr(route, "methods")]
 
-@app.put('/user/{user_id}',response_model=Users,status_code=status.HTTP_200_OK)
-def update_an_item(user_id:int,user:Users):
-    item_to_update=db.query(models.Users).filter(models.Users.id==user_id).first()
-    item_to_update.nameSurname=user.nameSurname
-    item_to_update.nickName=user.nickName
-    item_to_update.email=user.email
-    item_to_update.password=user.password
+        for method in methods:
+            # access_token
+            if (
+                re.search("jwt_required", inspect.getsource(endpoint)) or
+                re.search("fresh_jwt_required", inspect.getsource(endpoint)) or
+                re.search("jwt_optional", inspect.getsource(endpoint))
+            ):
+                openapi_schema["paths"][path][method]["security"] = [
+                    {
+                        "Bearer Auth": []
+                    }
+                ]
 
-    db.commit()
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
 
-    return item_to_update
 
-@app.delete('/user/{user_id}')
-def delete_item(user_id:int):
-    item_to_delete=db.query(models.Users).filter(models.Users.id==user_id).first()
+app.openapi = custom_openapi
 
-    if item_to_delete is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Resource Not Found")
-    
-    db.delete(item_to_delete)
-    db.commit()
 
-    return item_to_delete
+@AuthJWT.load_config
+def get_config():
+    return Settings()
+
+app.include_router(auth_router)
+
+

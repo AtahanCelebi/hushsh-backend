@@ -45,8 +45,8 @@ class WCModel(BaseModel):
         schema_extra={
             "example":{
                 "score":2 ,# 1 to 10 point for hushsh's registered toilets
-                "wc_size":"LARGE",
-                "wc_status":"PENDING"
+                "wc_size":"LARGE" #small, medium, large
+                                    #additional options going to add here!!!
             }
         }
 

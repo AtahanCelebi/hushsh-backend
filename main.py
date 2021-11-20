@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from auth_routes import auth_router
+from wc_routes import wc_router
 from fastapi_jwt_auth import AuthJWT
 from schemas import Settings
 import inspect, re
@@ -63,5 +64,5 @@ def get_config():
     return Settings()
 
 app.include_router(auth_router)
-
+app.include_router(wc_router)
 

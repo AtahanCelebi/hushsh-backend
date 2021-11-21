@@ -19,14 +19,20 @@ async def home(Authorize:AuthJWT=Depends()):
     try:
         Authorize.jwt_required() #if the our hushsh user have his/her specific token!!!
                                                 #then this page can be seen.
+
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Token"
         )
 
-
-    return {"message":"Welcome to hushsh.com Home Page"}
+    current_user = Authorize.get_jwt_subject()
+    user = session.query(User).filter(User.username==current_user).first()
+    getAll= session.query(WC).all()
+    return {
+        "message":"Welcome to hushsh.com Home Page",
+    "flow":jsonable_encoder(getAll)}
 
 #wc add section
 @wc_router.post('/add')

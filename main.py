@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from auth_routes import auth_router
 from wc_routes import wc_router
+from profile_routes import profile_router
+from rating_routes import rating_router
 from fastapi_jwt_auth import AuthJWT
 from schemas import Settings
 import inspect, re
@@ -65,4 +67,6 @@ def get_config():
 
 app.include_router(auth_router)
 app.include_router(wc_router)
+app.include_router(profile_router)
+app.include_router(rating_router)
 

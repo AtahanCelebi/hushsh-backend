@@ -1,8 +1,8 @@
 from fastapi import APIRouter,status,Depends
 from fastapi.exceptions import HTTPException
 from database import Session,engine
-from schemas import SignUpModel,LoginModel
-from models import User
+from schemas import SignUpModel,LoginModel,ProfileModel
+from models import User,Profile
 from fastapi.exceptions import HTTPException
 from werkzeug.security import generate_password_hash , check_password_hash
 from fastapi_jwt_auth import AuthJWT
@@ -18,8 +18,8 @@ auth_router=APIRouter(
 
 session=Session(bind=engine)
 
-@auth_router.get('/')
-async def hello(Authorize:AuthJWT=Depends()):
+@auth_router.get('/profile')
+async def MyProfile(Authorize:AuthJWT=Depends()):
 
     try:
         Authorize.jwt_required()
@@ -29,13 +29,20 @@ async def hello(Authorize:AuthJWT=Depends()):
             detail="Invalid Token"
         )
 
-    return {"message":"Hello World"}
+
+    current_user = Authorize.get_jwt_subject()
+    user = session.query(User).filter(User.username == current_user).first()
+    return {"message":"Welcome %s"%(user.username),
+            "email":user.email,
+            "Your id":user.id,
+            "Name Surname":user.name_surname
+            }
 
 
 @auth_router.post('/signup',
     status_code=status.HTTP_201_CREATED
 )
-async def signup(user:SignUpModel):
+async def signup(user:SignUpModel,profile:ProfileModel):
 
     db_email=session.query(User).filter(User.email==user.email).first()
 
@@ -45,26 +52,40 @@ async def signup(user:SignUpModel):
         )
 
     db_username=session.query(User).filter(User.username==user.username).first()
-
     if db_username is not None:
         return HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
             detail="User with the username already exists"
         )
-
     new_user=User(
         username=user.username,
         email=user.email,
         password=generate_password_hash(user.password),
-        is_active=user.is_active,
-        is_staff=user.is_staff
-    )
+        role=user.role,
+        name_surname = user.name_surname,
+        gender = user.gender
 
+    )
     session.add(new_user)
 
     session.commit()
 
+
+    new_profile=create_profil(new_user)
+    session.add(new_profile)
+    session.commit()
+
     return   "{Message:You successfully signup to hushsh.com}"       #new_user da dönebilirsin
 
+def create_profil(db_user):
+    new_profile = Profile(
+        id=db_user.id,
+        name_surname=db_user.name_surname,
+        gender=db_user.gender,
+        email=db_user.email,
+        nickname=db_user.username,
+        role=db_user.role
+    )
+    return new_profile
 
 #login route
 
